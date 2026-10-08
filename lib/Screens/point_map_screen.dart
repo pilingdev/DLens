@@ -24,12 +24,14 @@ class _PointMapScreenState extends State<PointMapScreen>
   bool _isOffline = false;
   bool _isLocating = true;
   LatLng? _userLocation;
-
   StreamSubscription? _sightingsSub;
   List<Sighting> _allSightings = [];
+  /// Fixed 100 m community radius per documentation.
+  static const double _communityRadiusM = 100.0;
+  String? _streamErrorMessage;
 
-  // Hardcoded fallback location (Kuala Lumpur)
-  final LatLng _fallbackLocation = const LatLng(3.1390, 101.6869);
+  // Hardcoded fallback location (Manila)
+  final LatLng _fallbackLocation = const LatLng(14.5995, 120.9842);
 
   @override
   void initState() {
@@ -113,18 +115,27 @@ class _PointMapScreenState extends State<PointMapScreen>
     if (_userLocation == null) return;
 
     _sightingsSub?.cancel();
-    // Fetch sightings within roughly 5000m to allow the "All" view to show something,
-    // and then filter to 100m when toggled. (For a global map, we might fetch differently).
-    // Let's fetch 1000m for this view to avoid massive data downloads.
+    setState(() => _streamErrorMessage = null);
+    // Fetch sightings within the fixed 100 m community radius.
     _sightingsSub = SightingFeedService()
-        .sightingsNear(_userLocation!, radiusM: 110)
-        .listen((sightings) {
-          if (mounted) {
-            setState(() {
-              _allSightings = sightings;
-            });
-          }
-        });
+        .sightingsNear(_userLocation!, radiusM: _communityRadiusM)
+        .listen(
+          (sightings) {
+            if (mounted) {
+              setState(() {
+                _allSightings = sightings;
+                _streamErrorMessage = null;
+              });
+            }
+          },
+          onError: (Object err) {
+            if (mounted) {
+              setState(() {
+                _streamErrorMessage = 'Could not load community sightings. Please check connection.';
+              });
+            }
+          },
+        );
   }
 
   List<Sighting> get _filteredSightings => _allSightings;
@@ -216,12 +227,12 @@ class _PointMapScreenState extends State<PointMapScreen>
                                     decoration: BoxDecoration(
                                       color: const Color(
                                         0xFF2ECC71,
-                                      ).withOpacity(0.1),
+                                      ).withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: const Color(
                                           0xFF2ECC71,
-                                        ).withOpacity(0.3),
+                                        ).withValues(alpha: 0.3),
                                       ),
                                     ),
                                     child: Text(
@@ -345,31 +356,31 @@ class _PointMapScreenState extends State<PointMapScreen>
               ),
             ),
             children: [
-              // Light Mode Basemap (CartoDB Light)
+              // OpenStreetMap Basemap (no watermark, no API key required)
               TileLayer(
-                urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.denguelens.app',
+                maxZoom: 19,
               ),
 
               if (_userLocation != null) ...[
-                // Range Rings
+                // 100 m Community Radius Ring
                 CircleLayer(
                   circles: [
                     CircleMarker(
                       point: _userLocation!,
-                      color: const Color(0xFF2ECC71).withOpacity(0.05),
-                      borderColor: const Color(0xFF2ECC71).withOpacity(0.3),
+                      color: const Color(0xFF2ECC71).withValues(alpha: 0.05),
+                      borderColor: const Color(0xFF2ECC71).withValues(alpha: 0.3),
                       borderStrokeWidth: 1.5,
-                      radius: 110, // 110m ring
+                      radius: _communityRadiusM,
                       useRadiusInMeter: true,
                     ),
                     CircleMarker(
                       point: _userLocation!,
-                      color: const Color(0xFF2ECC71).withOpacity(0.08),
-                      borderColor: const Color(0xFF2ECC71).withOpacity(0.4),
+                      color: const Color(0xFF2ECC71).withValues(alpha: 0.08),
+                      borderColor: const Color(0xFF2ECC71).withValues(alpha: 0.4),
                       borderStrokeWidth: 1.5,
-                      radius: 50, // 50m ring
+                      radius: 50.0,
                       useRadiusInMeter: true,
                     ),
                   ],
@@ -389,7 +400,7 @@ class _PointMapScreenState extends State<PointMapScreen>
                           border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF3498DB).withOpacity(0.5),
+                              color: const Color(0xFF3498DB).withValues(alpha: 0.5),
                               blurRadius: 8,
                               spreadRadius: 2,
                             ),
@@ -430,7 +441,7 @@ class _PointMapScreenState extends State<PointMapScreen>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -464,14 +475,14 @@ class _PointMapScreenState extends State<PointMapScreen>
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.95),
+                        color: Colors.white.withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(30),
                         border: Border.all(
-                          color: const Color(0xFF2ECC71).withOpacity(0.2),
+                          color: const Color(0xFF2ECC71).withValues(alpha: 0.2),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -488,6 +499,32 @@ class _PointMapScreenState extends State<PointMapScreen>
                         ),
                       ),
                     ),
+
+
+                    // Stream Error Message Banner
+                    if (_streamErrorMessage != null)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8, left: 20, right: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.amber.shade400),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 16, color: Colors.amber.shade900),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _streamErrorMessage!,
+                                style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -530,14 +567,14 @@ class _PointMapScreenState extends State<PointMapScreen>
                   vertical: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.95),
+                  color: Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: const Color(0xFF2ECC71).withOpacity(0.2),
+                    color: const Color(0xFF2ECC71).withValues(alpha: 0.2),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -550,7 +587,7 @@ class _PointMapScreenState extends State<PointMapScreen>
                     Container(
                       width: 1,
                       height: 30,
-                      color: Colors.grey.withOpacity(0.2),
+                      color: Colors.grey.withValues(alpha: 0.2),
                     ),
                     _buildLegendItem('A. albopictus', const Color(0xFFF59E0B)),
                   ],
@@ -741,15 +778,15 @@ class _SightingMarkerState extends State<SightingMarker>
             height: 30,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: finalColor.withOpacity(opacity * 0.4),
+              color: finalColor.withValues(alpha: opacity * 0.4),
               border: Border.all(
-                color: finalColor.withOpacity(opacity),
+                color: finalColor.withValues(alpha: opacity),
                 width: 2,
               ),
               boxShadow: opacity > 0.5
                   ? [
                       BoxShadow(
-                        color: finalColor.withOpacity(opacity * 0.6),
+                        color: finalColor.withValues(alpha: opacity * 0.6),
                         blurRadius: 12,
                         spreadRadius: 2,
                       ),

@@ -1,16 +1,19 @@
-import 'package:DengueLens/l10n/app_localizations.dart';
+﻿import 'package:DengueLens/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import '../services/symptom_assessor.dart';
 import 'educational_library_screen.dart';
 import 'symptom_result_screen.dart';
 
-/// Symptom questionnaire screen — refactored for clarity.
+/// Symptom questionnaire screen with weighted scoring and WHO warning signs.
 class SymptomQuestionnaireScreen extends StatefulWidget {
-  final String mosquitoType;
+  /// The mosquitoType label from the scan result (e.g. Aedes aegypti).
+  /// Pass null when opening from the bottom nav without a prior scan.
+  final String? mosquitoType;
   final bool skipBittenQuestion;
 
   const SymptomQuestionnaireScreen({
     super.key,
-    required this.mosquitoType,
+    this.mosquitoType,
     this.skipBittenQuestion = false,
   });
 
@@ -19,65 +22,157 @@ class SymptomQuestionnaireScreen extends StatefulWidget {
       _SymptomQuestionnaireScreenState();
 }
 
+// ── Per-tile display metadata ─────────────────────────────────────────────────
+
+class _SymptomTile {
+  final Symptom symptom;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const _SymptomTile({
+    required this.symptom,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+}
+
 class _SymptomQuestionnaireScreenState
     extends State<SymptomQuestionnaireScreen> {
-  // If true, show the checklist. Otherwise ask the bitten question.
   late bool _showChecklist;
+  final Set<Symptom> _selected = {};
+  bool _noSymptoms = false;
 
-  static const List<_Symptom> _symptoms = [
-    _Symptom(
+  // Warning-sign tiles (red section)
+  static const List<_SymptomTile> _warningTiles = [
+    _SymptomTile(
+      symptom: Symptom.severeAbdominalPain,
+      title: 'Severe abdominal pain',
+      subtitle: 'Intense stomach pain or tenderness',
+      icon: Icons.warning_amber_rounded,
+    ),
+    _SymptomTile(
+      symptom: Symptom.persistentVomiting,
+      title: 'Persistent vomiting',
+      subtitle: 'Vomiting 3+ times in 24 hours',
+      icon: Icons.sick,
+    ),
+    _SymptomTile(
+      symptom: Symptom.mucosalBleeding,
+      title: 'Mucosal bleeding',
+      subtitle: 'Bleeding gums, nose, blood in vomit or stool',
+      icon: Icons.bloodtype,
+    ),
+    _SymptomTile(
+      symptom: Symptom.lethargyOrRestlessness,
+      title: 'Lethargy or restlessness',
+      subtitle: 'Extreme weakness or unusual agitation',
+      icon: Icons.bedtime,
+    ),
+  ];
+
+  // Regular symptom tiles
+  static const List<_SymptomTile> _regularTiles = [
+    _SymptomTile(
+      symptom: Symptom.highFever,
       title: 'High fever',
-      subtitle: 'Sudden onset above 38.5°C',
+      subtitle: 'Sudden onset above 38.5\u00b0C',
       icon: Icons.thermostat,
     ),
-    _Symptom(
-      title: 'Severe headache',
-      subtitle: 'Intense pain across forehead',
-      icon: Icons.psychology_alt,
-    ),
-    _Symptom(
+    _SymptomTile(
+      symptom: Symptom.retroOrbitalPain,
       title: 'Eye pain',
       subtitle: 'Pain behind the eyes',
       icon: Icons.visibility,
     ),
-    _Symptom(
+    _SymptomTile(
+      symptom: Symptom.severeJointMusclePain,
       title: 'Joint/muscle pain',
-      subtitle: 'Severe "bone-breaking" pain',
+      subtitle: 'Severe \u201cbone-breaking\u201d pain',
       icon: Icons.fitness_center,
     ),
-    _Symptom(
+    _SymptomTile(
+      symptom: Symptom.severeHeadache,
+      title: 'Severe headache',
+      subtitle: 'Intense pain across forehead',
+      icon: Icons.psychology_alt,
+    ),
+    _SymptomTile(
+      symptom: Symptom.skinRash,
       title: 'Skin rash',
       subtitle: 'Red spots on torso or limbs',
       icon: Icons.grain,
     ),
-    _Symptom(
+    _SymptomTile(
+      symptom: Symptom.nausea,
       title: 'Nausea',
-      subtitle: 'Persistent vomiting or queasiness',
+      subtitle: 'Mild queasiness (not persistent vomiting)',
       icon: Icons.mood_bad,
     ),
-    _Symptom(
-      title: 'Swollen glands',
-      subtitle: 'Enlarged lymph nodes in neck',
-      icon: Icons.account_circle,
-    ),
-    _Symptom(
+    _SymptomTile(
+      symptom: Symptom.fatigue,
       title: 'Fatigue',
       subtitle: 'Extreme weakness or exhaustion',
       icon: Icons.battery_1_bar,
     ),
+    _SymptomTile(
+      symptom: Symptom.swollenGlands,
+      title: 'Swollen glands',
+      subtitle: 'Enlarged lymph nodes in neck',
+      icon: Icons.account_circle,
+    ),
   ];
-
-  late final List<bool> _selected;
-  bool _noSymptoms = false;
 
   @override
   void initState() {
     super.initState();
     _showChecklist = widget.skipBittenQuestion;
-    _selected = List<bool>.filled(_symptoms.length, false);
   }
 
-  int get _selectedCount => _selected.where((v) => v).length;
+  void _toggleSymptom(Symptom symptom) {
+    setState(() {
+      _noSymptoms = false;
+      if (_selected.contains(symptom)) {
+        _selected.remove(symptom);
+      } else {
+        _selected.add(symptom);
+      }
+    });
+  }
+
+  void _toggleNoSymptoms() {
+    setState(() {
+      _noSymptoms = !_noSymptoms;
+      if (_noSymptoms) _selected.clear();
+    });
+  }
+
+  void _submitSymptoms() {
+    if (_selected.isEmpty && !_noSymptoms) {
+      final loc = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(loc.pleaseSelectOneOption),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final vector = VectorSpecies.fromLabel(widget.mosquitoType);
+    final assessment = SymptomAssessor.assess(_selected, vector: vector);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SymptomResultScreen(
+          assessment: assessment,
+          mosquitoType: widget.mosquitoType,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,8 +199,9 @@ class _SymptomQuestionnaireScreenState
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: _showChecklist
-            ? _SymptomChecklistView(
-                symptoms: _symptoms,
+            ? _ChecklistView(
+                warningTiles: _warningTiles,
+                regularTiles: _regularTiles,
                 selected: _selected,
                 noSymptoms: _noSymptoms,
                 onToggleNoSymptoms: _toggleNoSymptoms,
@@ -119,59 +215,11 @@ class _SymptomQuestionnaireScreenState
       ),
     );
   }
-
-  void _toggleNoSymptoms() {
-    setState(() {
-      _noSymptoms = !_noSymptoms;
-      if (_noSymptoms) {
-        for (var i = 0; i < _selected.length; i++) {
-          _selected[i] = false;
-        }
-      }
-    });
-  }
-
-  void _toggleSymptom(int index) {
-    setState(() {
-      _noSymptoms = false;
-      _selected[index] = !_selected[index];
-    });
-  }
-
-  void _submitSymptoms() {
-    final selected = <String>[];
-    for (var i = 0; i < _symptoms.length; i++) {
-      if (_selected[i]) {
-        selected.add(_symptoms[i].title);
-      }
-    }
-
-    if (selected.isEmpty && !_noSymptoms) {
-      final loc = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(loc.pleaseSelectOneOption),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => SymptomResultScreen(
-          symptomCount: _noSymptoms ? 0 : _selectedCount,
-          totalSymptoms: _symptoms.length,
-          selectedSymptoms: selected,
-          mosquitoType: widget.mosquitoType,
-        ),
-      ),
-    );
-  }
 }
 
-// Small presentational widgets below
+// ─────────────────────────────────────────────────────────────────────────────
+// Presentational widgets
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _BittenQuestionView extends StatelessWidget {
   final VoidCallback onYes;
@@ -228,7 +276,8 @@ class _BittenQuestionView extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(AppLocalizations.of(context)!.startAssessment),
+                    child:
+                        Text(AppLocalizations.of(context)!.startAssessment),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -253,16 +302,18 @@ class _BittenQuestionView extends StatelessWidget {
   }
 }
 
-class _SymptomChecklistView extends StatelessWidget {
-  final List<_Symptom> symptoms;
-  final List<bool> selected;
+class _ChecklistView extends StatelessWidget {
+  final List<_SymptomTile> warningTiles;
+  final List<_SymptomTile> regularTiles;
+  final Set<Symptom> selected;
   final bool noSymptoms;
   final VoidCallback onToggleNoSymptoms;
-  final void Function(int) onToggleSymptom;
+  final void Function(Symptom) onToggleSymptom;
   final VoidCallback onSubmit;
 
-  const _SymptomChecklistView({
-    required this.symptoms,
+  const _ChecklistView({
+    required this.warningTiles,
+    required this.regularTiles,
     required this.selected,
     required this.noSymptoms,
     required this.onToggleNoSymptoms,
@@ -274,6 +325,7 @@ class _SymptomChecklistView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Header
         Container(
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
@@ -306,29 +358,74 @@ class _SymptomChecklistView extends StatelessWidget {
             ],
           ),
         ),
+
+        // Scrollable list
         Expanded(
           child: Container(
             color: const Color(0xFFF8F9FA),
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              itemCount: symptoms.length + 1,
-              itemBuilder: (context, idx) {
-                if (idx == 0) {
-                  return _NoSymptomsTile(
-                    isSelected: noSymptoms,
-                    onTap: onToggleNoSymptoms,
-                  );
-                }
-                final i = idx - 1;
-                return _SymptomCard(
-                  symptom: symptoms[i],
-                  isSelected: selected[i],
-                  onTap: () => onToggleSymptom(i),
-                );
-              },
+              children: [
+                // ── Warning signs section ─────────────────────────────────
+                _SectionHeader(
+                  label: AppLocalizations.of(context)!.warningSigns,
+                  color: const Color(0xFFE74C3C),
+                  icon: Icons.emergency,
+                ),
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE74C3C).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(0xFFE74C3C).withValues(alpha: 0.25)),
+                  ),
+                  child: Text(
+                    AppLocalizations.of(context)!.warningSignsExplainer,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: Colors.red.shade800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...warningTiles.map((tile) => _SymptomCard(
+                      tile: tile,
+                      isSelected: selected.contains(tile.symptom),
+                      isWarning: true,
+                      onTap: () => onToggleSymptom(tile.symptom),
+                    )),
+
+                const SizedBox(height: 8),
+
+                // ── Regular symptoms section ──────────────────────────────
+                _SectionHeader(
+                  label: AppLocalizations.of(context)!.regularSymptoms,
+                  color: const Color(0xFF2ECC71),
+                  icon: Icons.checklist,
+                ),
+                const SizedBox(height: 4),
+                ...regularTiles.map((tile) => _SymptomCard(
+                      tile: tile,
+                      isSelected: selected.contains(tile.symptom),
+                      isWarning: false,
+                      onTap: () => onToggleSymptom(tile.symptom),
+                    )),
+
+                // ── No symptoms tile ──────────────────────────────────────
+                _NoSymptomsTile(
+                  isSelected: noSymptoms,
+                  onTap: onToggleNoSymptoms,
+                ),
+              ],
             ),
           ),
         ),
+
+        // Submit footer
         Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           decoration: BoxDecoration(
@@ -362,6 +459,146 @@ class _SymptomChecklistView extends StatelessWidget {
   }
 }
 
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _SectionHeader({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SymptomCard extends StatelessWidget {
+  final _SymptomTile tile;
+  final bool isSelected;
+  final bool isWarning;
+  final VoidCallback onTap;
+
+  const _SymptomCard({
+    required this.tile,
+    required this.isSelected,
+    required this.isWarning,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accentColor =
+        isWarning ? const Color(0xFFE74C3C) : const Color(0xFF2ECC71);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isSelected
+                    ? accentColor.withValues(alpha: 0.5)
+                    : Colors.grey.shade100,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 46,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    color: isSelected ? accentColor : Colors.grey.shade200,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(8),
+                    ),
+                  ),
+                ),
+                Icon(tile.icon, size: 20, color: Colors.grey.shade500),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tile.title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        tile.subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color:
+                        isSelected ? accentColor : Colors.transparent,
+                    border: Border.all(
+                      color: isSelected
+                          ? accentColor
+                          : Colors.grey.shade300,
+                      width: 2,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.check,
+                    size: 14,
+                    color:
+                        isSelected ? Colors.white : Colors.transparent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _NoSymptomsTile extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
@@ -371,7 +608,7 @@ class _NoSymptomsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(top: 4, bottom: 12),
       child: Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -379,7 +616,8 @@ class _NoSymptomsTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
                 Container(
@@ -410,113 +648,6 @@ class _NoSymptomsTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         AppLocalizations.of(context)!.noSymptomsSubtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected
-                        ? const Color(0xFF2ECC71)
-                        : Colors.transparent,
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF2ECC71)
-                          : Colors.grey.shade300,
-                      width: 2,
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.check,
-                    size: 14,
-                    color: isSelected ? Colors.white : Colors.transparent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Symptom {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  const _Symptom({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-}
-
-class _SymptomCard extends StatelessWidget {
-  final _Symptom symptom;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _SymptomCard({
-    required this.symptom,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade100, width: 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 6,
-                  height: 46,
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF2ECC71)
-                        : Colors.grey.shade200,
-                    borderRadius: const BorderRadius.horizontal(
-                      left: Radius.circular(8),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        symptom.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey.shade800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        symptom.subtitle,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade500,

@@ -7,6 +7,8 @@ import 'package:hive/hive.dart';
 class TutorialService {
   static const String _boxName = 'tutorial_prefs';
   static const String _hasSeenKey = 'has_seen_tutorial';
+  static const String _hasSeenDisclaimerKey = 'has_seen_disclaimer';
+  static const String _hasSeenCameraTipsKey = 'has_seen_camera_tips';
 
   // Singleton pattern
   static final TutorialService _instance = TutorialService._internal();
@@ -32,5 +34,21 @@ class TutorialService {
   /// Resets the flag so the tutorial can be replayed.
   Future<void> resetTutorial() async {
     await _box.put(_hasSeenKey, false);
+  }
+
+  /// Whether the user has dismissed the accuracy disclaimer.
+  bool get hasSeenDisclaimer => _box.get(_hasSeenDisclaimerKey, defaultValue: false);
+
+  /// Marks the disclaimer as dismissed so it won't show again.
+  Future<void> markDisclaimerSeen() async {
+    await _box.put(_hasSeenDisclaimerKey, true);
+  }
+
+  /// Whether the user has seen (and dismissed) the camera tips notice.
+  bool get hasSeenCameraTips => _box.get(_hasSeenCameraTipsKey, defaultValue: false);
+
+  /// Marks the camera tips as seen so the notice won't auto-show again.
+  Future<void> markCameraTipsSeen() async {
+    await _box.put(_hasSeenCameraTipsKey, true);
   }
 }

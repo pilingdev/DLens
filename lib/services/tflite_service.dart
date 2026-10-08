@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:math' as math;
 import '../models/prediction_result.dart';
+import '../utils/constants.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Top-level helpers — must be top-level so they cross isolate boundaries.
@@ -88,8 +88,8 @@ _PreprocessResult _preprocessIsolate(_PreprocessPayload payload) {
   final int dy = ((targetSize - newUnpadH) / 2).round();
   img.compositeImage(padded, resized, dstX: dx, dstY: dy);
 
-  final int W = padded.width; // 640
-  final int H = padded.height; // 640
+  final int W = padded.width; // matches payload.targetSize (e.g. 960)
+  final int H = padded.height; // matches payload.targetSize (e.g. 960)
   const int C = 3; // RGB
 
   // ── Build the FLOAT32 buffer (normalized to [0, 1]) ───────────────────
@@ -209,7 +209,7 @@ class TfliteService {
   /// False when NHWC [1, 640, 640, 3].
   late bool _isNchw;
 
-  static const int _inputSize = 640;
+  static const int _inputSize = AppConstants.modelInputSize;
   static const int _maxDetections = 3;
 
   // ─── init() ─────────────────────────────────────────────────────────────
@@ -229,12 +229,12 @@ class TfliteService {
     if (_initialized) return;
 
     // ── 1. Load model ──────────────────────────────────────────────────
-    final data = await rootBundle.load('Model/newyolo.tflite');
+    final data = await rootBundle.load(AppConstants.modelPath);
     final modelBytes = data.buffer.asUint8List(
       data.offsetInBytes,
       data.lengthInBytes,
     );
-    debugPrint('TfliteService: loaded newyolo.tflite');
+    debugPrint('TfliteService: loaded best.tflite');
 
     _interpreter = Interpreter.fromBuffer(modelBytes);
 
@@ -403,11 +403,15 @@ class TfliteService {
             ),
           );
 
+    final sw = Stopwatch()..start();
     try {
       _interpreter.run(inputData, output);
     } catch (e, st) {
       debugPrint('TfliteService: inference failed: $e\n$st');
       throw Exception('TFLite inference failed: $e');
+    } finally {
+      sw.stop();
+      debugPrint('>>> INFERENCE LATENCY: ${sw.elapsedMilliseconds} ms');
     }
 
     // ── Step 4: Decode YOLO output boxes ──────────────────────────────────

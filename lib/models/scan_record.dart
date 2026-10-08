@@ -33,6 +33,10 @@ class ScanRecord {
     this.imageHeight,
   });
 
+  /// Returns [imageFile] only if it exists on disk, otherwise null.
+  File? get imageFileIfExists =>
+      (imageFile != null && imageFile!.existsSync()) ? imageFile : null;
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

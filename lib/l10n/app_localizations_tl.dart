@@ -576,4 +576,103 @@ class AppLocalizationsTl extends AppLocalizations {
 
   @override
   String get mapRetryConnection => 'Subukang Muli';
+
+  @override
+  String get cameraTipsTitle => 'Bago Mag-scan';
+
+  @override
+  String get cameraTipsSubtitle =>
+      'Sundin ang mga tip na ito para sa pinaka-tumpak na resulta.';
+
+  @override
+  String get cameraTipDistanceTitle => 'Lumapit';
+
+  @override
+  String get cameraTipDistanceDesc =>
+      'Hawakan ang kamera 5–10 cm mula sa lamok (o mas malapit) habang nakikita ang buong katawan sa frame.';
+
+  @override
+  String get cameraTipLightingTitle => 'Gumamit ng Magandang Ilaw';
+
+  @override
+  String get cameraTipLightingDesc =>
+      'I-on ang flash kung madilim ang lugar para malinaw na makita ang kulay, marka, at pakpak ng lamok.';
+
+  @override
+  String get cameraTipCountTitle => 'Isang Lamok sa Isang Pagkakataon';
+
+  @override
+  String get cameraTipCountDesc =>
+      'Nakaka-detect ang app ng 1–3 lamok bawat larawan. Para sa pinakamahusay na resulta, iwasang kumuha ng maraming lamok nang sabay-sabay.';
+
+  @override
+  String get cameraTipsGotIt => 'Naiintindihan ko';
+
+  @override
+  String get warningSigns =>
+      'Mga Babala — Humingi ng Emergency na Pangangalaga';
+
+  @override
+  String get warningSignsExplainer =>
+      'Ang alinman sa mga palatandaang ito ay nangangahulugang humanap ng emergency na medikal na pangangalaga kaagad. Huwag antayin.';
+
+  @override
+  String get regularSymptoms => 'Mga Sintomas ng Dengue';
+
+  @override
+  String get riskLevelLow => 'Mababa';
+
+  @override
+  String get riskLevelModerate => 'Katamtaman';
+
+  @override
+  String get riskLevelHigh => 'Mataas';
+
+  @override
+  String get riskLevelEmergency => 'Emergency';
+
+  @override
+  String get riskSummaryNoSymptoms =>
+      'Walang naiulat na sintomas. Patuloy na bantayan ang inyong kalusugan at magsagawa ng mga hakbang para maiwasan ang karagdagang kagat ng lamok.';
+
+  @override
+  String get riskSummaryLow =>
+      'Ang inyong pagsusuri ay nagpapakita ng Mababang Antas ng Panganib. Ipagpatuloy ang pagmamasid sa kalusugan at magsagawa ng pag-iingat para maiwasan ang karagdagang kagat ng lamok.';
+
+  @override
+  String get riskSummaryModerate =>
+      'Ang inyong pagsusuri ay nagpapakita ng Katamtamang Antas ng Panganib. Ilang sintomas ng dengue ang natukoy. Bantayan nang mabuti, manatiling may sapat na likido, at kumonsulta sa isang tagapagbigay ng pangangalagang pangkalusugan kung lumala ang mga sintomas.';
+
+  @override
+  String get riskSummaryHigh =>
+      'Ang inyong pagsusuri ay nagpapakita ng Mataas na Antas ng Panganib na may maraming sintomas ng dengue. Humingi ng agarang medikal na pagsusuri ngayon. Inirerekomenda ang agarang konsultasyon.';
+
+  @override
+  String get riskSummaryEmergency =>
+      'Ang inyong mga sintomas ay naglalaman ng mga babala ng dengue ng WHO. Humingi ng emergency na medikal na atensyon kaagad. Pumunta sa pinakamalapit na ospital o tumawag sa mga serbisyo ng emergency ngayon.';
+
+  @override
+  String get whyResultWarningSigns =>
+      'Natukoy ang mga babala — nangangailangan ang mga ito ng agarang emergency na medikal na pangangalaga.';
+
+  @override
+  String whyResultContributors(String symptoms) {
+    return 'Ang $symptoms ay matibay na palatandaan ng dengue.';
+  }
+
+  @override
+  String get andConnector => ' at ';
+
+  @override
+  String vectorBonusNote(String species, int bonus) {
+    return 'Natukoy ang $species: +$bonus puntos ang idinagdag sa puntuasyon.';
+  }
+
+  @override
+  String get emergencyCare1 =>
+      'Pumunta sa pinakamalapit na Emergency Room o tumawag sa mga serbisyo ng emergency kaagad.';
+
+  @override
+  String get emergencyCare2 =>
+      'Huwag uminom ng aspirin o ibuprofen. Paracetamol lamang para sa lagnat.';
 }

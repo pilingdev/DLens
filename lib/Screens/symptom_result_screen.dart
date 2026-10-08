@@ -1,111 +1,78 @@
 import 'package:DengueLens/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
-import '../services/history_service.dart';
-import '../models/scan_record.dart';
+import '../services/symptom_assessor.dart';
 
-class SymptomResultScreen extends StatefulWidget {
-  final int symptomCount;
-  final int totalSymptoms;
-  final List<String> selectedSymptoms;
-  final String mosquitoType;
+/// Displays the weighted risk assessment result from [SymptomAssessor].
+///
+/// Three render states:
+///   1. No symptoms -- calm informational card.
+///   2. Normal result -- Low / Moderate / High with care tips.
+///   3. Emergency -- red full-screen alert with seek care now messaging.
+class SymptomResultScreen extends StatelessWidget {
+  final RiskAssessment assessment;
+
+  /// Original mosquito label string (used for display only).
+  final String? mosquitoType;
 
   const SymptomResultScreen({
     super.key,
-    required this.symptomCount,
-    required this.totalSymptoms,
-    required this.selectedSymptoms,
-    required this.mosquitoType,
+    required this.assessment,
+    this.mosquitoType,
   });
 
-  @override
-  State<SymptomResultScreen> createState() => _SymptomResultScreenState();
-}
+  // ── Colours ────────────────────────────────────────────────────────────────
+  static const Color _green = Color(0xFF2ECC71);
+  static const Color _orange = Color(0xFFF39C12);
+  static const Color _deepOrange = Color(0xFFE67E22);
+  static const Color _red = Color(0xFFE74C3C);
 
-class _SymptomResultScreenState extends State<SymptomResultScreen> {
-  bool _isSaving = false;
-
-  int get symptomCount => widget.symptomCount;
-  int get totalSymptoms => widget.totalSymptoms;
-  List<String> get selectedSymptoms => widget.selectedSymptoms;
-  String get mosquitoType => widget.mosquitoType;
-
-  static const Color _accentGreen = Color(0xFF2ECC71);
-
-  String get _riskLevel {
-    // Base thresholds on raw symptom count.
-    String base;
-    if (symptomCount == 0)
-      base = 'Low';
-    else if (symptomCount <= 2)
-      base = 'Moderate';
-    else if (symptomCount <= 4)
-      base = 'High';
-    else
-      base = 'Critical';
-
-    // Elevate risk one tier when Aedes aegypti (primary dengue vector) was
-    // detected — same symptom burden is more concerning with a confirmed
-    // high-risk vector species.
-    final isAegypti = mosquitoType.toLowerCase().contains('aegypti');
-    if (isAegypti) {
-      switch (base) {
-        case 'Low':
-          return 'Moderate';
-        case 'Moderate':
-          return 'High';
-        case 'High':
-          return 'Critical';
-        default:
-          return base; // Critical stays Critical
-      }
-    }
-    return base;
-  }
-
-  Color get _riskColor {
-    switch (_riskLevel) {
-      case 'Low':
-        return _accentGreen;
-      case 'Moderate':
-        return const Color(0xFFF39C12);
-      case 'High':
-        return const Color(0xFFE67E22);
-      case 'Critical':
-        return const Color(0xFFE74C3C);
-      default:
-        return Colors.grey;
+  Color get _levelColor {
+    switch (assessment.level) {
+      case RiskLevel.low:
+        return _green;
+      case RiskLevel.moderate:
+        return _orange;
+      case RiskLevel.high:
+        return _deepOrange;
+      case RiskLevel.emergency:
+        return _red;
     }
   }
 
-  String get _summaryText {
-    switch (_riskLevel) {
-      case 'Low':
-        return 'It is better to observe your health and remain cautious. Continue monitoring your health '
-            'and take precautions to avoid further mosquito bites.';
-      case 'Moderate':
-        return 'Your current assessment indicates a '
-            'Moderate Risk level. Some dengue symptoms detected. This status requires monitoring and adherence to '
-            'the home care protocols outlined above. Please schedule a consultation with a healthcare provider.';
-      case 'High':
-        return 'Your current assessment indicates a '
-            'High Risk level with multiple dengue symptoms. This status requires prompt medical evaluation and adherence to '
-            'clinical recommendations. Immediate consultation is advised.';
-      case 'Critical':
-        return 'Your current assessment indicates a '
-            'Critical Risk level. This status requires immediate emergency medical attention. '
-            'Please proceed to the nearest healthcare facility without delay.';
-      default:
-        return '';
+  String _levelLabel(AppLocalizations loc) {
+    switch (assessment.level) {
+      case RiskLevel.low:
+        return loc.riskLevelLow;
+      case RiskLevel.moderate:
+        return loc.riskLevelModerate;
+      case RiskLevel.high:
+        return loc.riskLevelHigh;
+      case RiskLevel.emergency:
+        return loc.riskLevelEmergency;
     }
   }
 
-  List<Map<String, dynamic>> get _homeCareTips {
-    switch (_riskLevel) {
-      case 'Low':
+  String _summaryText(AppLocalizations loc) {
+    if (assessment.noSymptoms) return loc.riskSummaryNoSymptoms;
+    switch (assessment.level) {
+      case RiskLevel.low:
+        return loc.riskSummaryLow;
+      case RiskLevel.moderate:
+        return loc.riskSummaryModerate;
+      case RiskLevel.high:
+        return loc.riskSummaryHigh;
+      case RiskLevel.emergency:
+        return loc.riskSummaryEmergency;
+    }
+  }
+
+  List<Map<String, dynamic>> _careTips(RiskLevel level) {
+    switch (level) {
+      case RiskLevel.low:
         return [
           {
             'title': 'Monitor Health',
-            'subtitle': 'Watch for any symptom development',
+            'subtitle': 'Watch for any new or worsening symptoms',
             'icon': Icons.visibility_outlined,
           },
           {
@@ -114,35 +81,34 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
             'icon': Icons.shield_outlined,
           },
         ];
-      case 'Moderate':
+      case RiskLevel.moderate:
         return [
           {
-            'title': 'Prioritize Rest',
-            'subtitle':
-                'Limit physical exertion to allow your body\'s immune system to function optimally during recovery',
+            'title': 'Rest',
+            'subtitle': 'Limit physical exertion to aid recovery',
             'icon': Icons.hotel_outlined,
           },
           {
-            'title': 'Continuous Hydration',
-            'subtitle': 'Electrolytes and consistent intake',
+            'title': 'Hydrate',
+            'subtitle': 'Fluids and electrolytes consistently',
             'icon': Icons.local_drink_outlined,
           },
           {
-            'title': 'Active Observation',
-            'subtitle': 'Monitor for any worsening symptoms',
+            'title': 'Monitor',
+            'subtitle': 'Watch for worsening or new symptoms',
             'icon': Icons.visibility_outlined,
           },
         ];
-      case 'High':
+      case RiskLevel.high:
         return [
           {
             'title': 'Seek Medical Care',
-            'subtitle': 'Visit healthcare facility today',
+            'subtitle': 'Visit a healthcare facility today',
             'icon': Icons.local_hospital_outlined,
           },
           {
             'title': 'Blood Test',
-            'subtitle': 'Confirm dengue diagnosis',
+            'subtitle': 'Confirm dengue diagnosis (NS1/CBC)',
             'icon': Icons.science_outlined,
           },
           {
@@ -151,26 +117,60 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
             'icon': Icons.dangerous_outlined,
           },
         ];
-      case 'Critical':
+      case RiskLevel.emergency:
         return [
           {
-            'title': 'Emergency care',
-            'subtitle': 'Go to the nearest ER or call emergency services',
+            'title': 'Emergency Care',
+            'subtitle': 'Go to the nearest ER immediately',
             'icon': Icons.local_hospital_outlined,
           },
         ];
-      default:
-        return [];
     }
   }
 
-  double get _scoreProgress {
-    if (totalSymptoms <= 0) return 0;
-    return (symptomCount / totalSymptoms).clamp(0.0, 1.0);
+  // ── Why this result contributor line ────────────────────────────────────
+
+  String _contributorLine(AppLocalizations loc) {
+    if (assessment.hasWarningSign) return loc.whyResultWarningSigns;
+    if (assessment.noSymptoms) return '';
+    if (assessment.topContributors.isEmpty) return '';
+
+    final names = assessment.topContributors.map((s) {
+      switch (s) {
+        case Symptom.highFever:
+          return loc.symptomHighFever;
+        case Symptom.retroOrbitalPain:
+          return loc.symptomEyePain;
+        case Symptom.severeJointMusclePain:
+          return loc.symptomJointPain;
+        case Symptom.severeHeadache:
+          return loc.symptomSevereHeadache;
+        case Symptom.skinRash:
+          return loc.symptomSkinRash;
+        case Symptom.nausea:
+          return loc.symptomNausea;
+        case Symptom.fatigue:
+          return loc.symptomFatigue;
+        case Symptom.swollenGlands:
+          return loc.symptomSwollenGlands;
+        default:
+          return '';
+      }
+    }).where((s) => s.isNotEmpty).toList();
+
+    if (names.isEmpty) return '';
+    return loc.whyResultContributors(names.join(loc.andConnector));
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
+
+    // Emergency state gets its own full-screen layout
+    if (assessment.level == RiskLevel.emergency) {
+      return _EmergencyScreen(loc: loc);
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -178,25 +178,23 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: true,
+        automaticallyImplyLeading: false,
         title: Text(
-          AppLocalizations.of(context)!.riskAssessment,
+          loc.riskAssessment,
           style: const TextStyle(
             color: Colors.black87,
             fontWeight: FontWeight.w600,
             fontSize: 18,
           ),
         ),
-        automaticallyImplyLeading: false,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             children: [
+              // ── Medical disclaimer ──────────────────────────────────────
               Container(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.amber.shade50,
@@ -206,15 +204,12 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.amber.shade800,
-                      size: 20,
-                    ),
+                    Icon(Icons.info_outline,
+                        color: Colors.amber.shade800, size: 20),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        AppLocalizations.of(context)!.medicalDisclaimerText,
+                        loc.medicalDisclaimerText,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.amber.shade900,
@@ -225,67 +220,105 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: 200,
-                height: 200,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 200,
-                      height: 200,
-                      child: CircularProgressIndicator(
-                        value: _scoreProgress,
-                        strokeWidth: 5,
-                        strokeCap: StrokeCap.round,
-                        backgroundColor: _riskColor.withValues(alpha: 0.18),
-                        color: _riskColor,
+
+              // ── Score ring ──────────────────────────────────────────────
+              if (!assessment.noSymptoms) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 200,
+                        height: 200,
+                        child: CircularProgressIndicator(
+                          value: assessment.total / 14.0,
+                          strokeWidth: 5,
+                          strokeCap: StrokeCap.round,
+                          backgroundColor:
+                              _levelColor.withValues(alpha: 0.18),
+                          color: _levelColor,
+                        ),
                       ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          AppLocalizations.of(context)!.score,
-                          style: TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1.2,
-                            color: Colors.grey.shade500,
-                            fontWeight: FontWeight.w600,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            loc.score,
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1.2,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '$symptomCount',
-                          style: TextStyle(
-                            fontSize: 52,
-                            fontWeight: FontWeight.bold,
-                            color: _riskColor,
-                            height: 1,
+                          const SizedBox(height: 6),
+                          Text(
+                            '${assessment.total}',
+                            style: TextStyle(
+                              fontSize: 52,
+                              fontWeight: FontWeight.bold,
+                              color: _levelColor,
+                              height: 1,
+                            ),
                           ),
-                        ),
-                        Text(
-                          '/ $totalSymptoms',
+                          Text(
+                            '/ 14',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ] else
+                const SizedBox(height: 24),
+
+              // ── No-symptoms message ─────────────────────────────────────
+              if (assessment.noSymptoms)
+                Container(
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _green.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: _green.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          color: _green, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          loc.riskSummaryNoSymptoms,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade500,
-                            fontWeight: FontWeight.w500,
+                            height: 1.5,
+                            color: Colors.grey.shade800,
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+
               const SizedBox(height: 18),
+
+              // ── Risk badge ──────────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
-                ),
+                    horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
-                  color: _riskColor.withValues(alpha: 0.12),
+                  color: _levelColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
@@ -296,23 +329,58 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                       height: 8,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _riskColor,
+                        color: _levelColor,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      '${_riskLevel.toUpperCase()} RISK',
+                      '${_levelLabel(loc).toUpperCase()} RISK',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
-                        color: _riskColor,
+                        color: _levelColor,
                       ),
                     ),
                   ],
                 ),
               ),
+
+              // ── Vector bonus note ───────────────────────────────────────
+              if (assessment.vectorBonus > 0 && !assessment.noSymptoms) ...[
+                const SizedBox(height: 10),
+                Text(
+                  loc.vectorBonusNote(mosquitoType ?? 'Dengue vector',
+                      assessment.vectorBonus),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+
+              // ── Contributor line (why this result) ─────────────────────
+              if (!assessment.noSymptoms) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    _contributorLine(loc),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade600,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 36),
+
+              // ── Home care tips ──────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
@@ -322,7 +390,7 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            AppLocalizations.of(context)!.homeCareProtocol,
+                            loc.homeCareProtocol,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -332,58 +400,42 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
+                              horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: _accentGreen.withValues(alpha: 0.15),
+                            color: _levelColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
-                            AppLocalizations.of(context)!.recommended,
+                            loc.recommended,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.6,
-                              color: _riskLevel == 'Low'
-                                  ? _accentGreen
-                                  : _riskColor,
+                              color: _levelColor,
                             ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 18),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: _homeCareTips.length == 1 ? 1 : 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        mainAxisExtent: _homeCareTips.length == 1 ? 124 : 132,
-                      ),
-                      itemCount: _homeCareTips.length,
-                      itemBuilder: (context, index) {
-                        return _CareTipCard(
-                          tip: _homeCareTips[index],
-                          accent: _riskLevel == 'Low'
-                              ? _accentGreen
-                              : _riskColor,
-                        );
-                      },
+                    _CareTipsGrid(
+                      tips: _careTips(assessment.level),
+                      accent: _levelColor,
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 28),
+
+              // ── Assessment summary text ─────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      AppLocalizations.of(context)!.assessmentSummary,
+                      loc.assessmentSummary,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -393,7 +445,7 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _summaryText,
+                      _summaryText(loc),
                       style: TextStyle(
                         fontSize: 14,
                         height: 1.65,
@@ -403,89 +455,49 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 36),
+
+              // ── Back to home ────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () async {
-                            setState(() => _isSaving = true);
-                            try {
-                              await HistoryService().addRecord(
-                                ScanRecord(
-                                  id: DateTime.now().millisecondsSinceEpoch
-                                      .toString(),
-                                  mosquitoType: mosquitoType,
-                                  result: _riskLevel,
-                                  confidence: totalSymptoms > 0
-                                      ? symptomCount / totalSymptoms
-                                      : 0,
-                                  date: DateTime.now(),
-                                  symptoms: selectedSymptoms,
-                                  riskScore: symptomCount,
-                                ),
-                              );
-                            } finally {
-                              if (mounted) setState(() => _isSaving = false);
-                            }
-                            if (mounted) {
-                              final loc = AppLocalizations.of(context)!;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(loc.symptomAssessmentLogged),
-                                  backgroundColor: _accentGreen,
-                                ),
-                              );
-                              Navigator.of(
-                                context,
-                              ).popUntil((route) => route.isFirst);
-                            }
-                          },
+                    onPressed: () =>
+                        Navigator.of(context).popUntil((r) => r.isFirst),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _accentGreen,
+                      backgroundColor: _green,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.arrow_forward, size: 22),
-                              const SizedBox(width: 8),
-                              Text(
-                                AppLocalizations.of(context)!.continue_btn,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.arrow_forward, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          loc.continue_btn,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
                           ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
+                onPressed: () =>
+                    Navigator.of(context).popUntil((r) => r.isFirst),
                 child: Text(
-                  AppLocalizations.of(context)!.backToHome,
+                  loc.backToHome,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -502,57 +514,228 @@ class _SymptomResultScreenState extends State<SymptomResultScreen> {
   }
 }
 
-class _CareTipCard extends StatelessWidget {
-  final Map<String, dynamic> tip;
-  final Color accent;
+// ─────────────────────────────────────────────────────────────────────────────
+// Emergency full-screen
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _CareTipCard({required this.tip, required this.accent});
+class _EmergencyScreen extends StatelessWidget {
+  final AppLocalizations loc;
+  const _EmergencyScreen({required this.loc});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 1.5,
-      shadowColor: Colors.black26,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+    return Scaffold(
+      backgroundColor: const Color(0xFFE74C3C),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: accent.withValues(alpha: 0.14),
-              ),
-              child: Icon(tip['icon'] as IconData, size: 22, color: accent),
-            ),
-            const SizedBox(height: 10),
+            const Spacer(),
+            const Icon(Icons.emergency, size: 80, color: Colors.white),
+            const SizedBox(height: 20),
             Text(
-              tip['title'] as String,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade900,
+              loc.riskLevelEmergency.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+                letterSpacing: 1.5,
               ),
             ),
-            const SizedBox(height: 4),
-            Expanded(
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(
-                tip['subtitle'] as String,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.35,
-                  color: Colors.grey.shade600,
+                loc.riskSummaryEmergency,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                  height: 1.6,
                 ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const Spacer(),
+
+            // White care card
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      loc.homeCareProtocol,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFE74C3C),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _CareRow(
+                        icon: Icons.local_hospital_outlined,
+                        text: loc.emergencyCare1),
+                    const SizedBox(height: 8),
+                    _CareRow(
+                        icon: Icons.warning_amber_rounded,
+                        text: loc.emergencyCare2),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () =>
+                      Navigator.of(context).popUntil((r) => r.isFirst),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFFE74C3C),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    loc.backToHome,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Disclaimer
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                loc.medicalDisclaimerText,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.white70,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CareRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _CareRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: const Color(0xFFE74C3C)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Care tips grid
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CareTipsGrid extends StatelessWidget {
+  final List<Map<String, dynamic>> tips;
+  final Color accent;
+
+  const _CareTipsGrid({required this.tips, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: tips.length == 1 ? 1 : 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        mainAxisExtent: tips.length == 1 ? 124 : 132,
+      ),
+      itemCount: tips.length,
+      itemBuilder: (context, index) {
+        final tip = tips[index];
+        return Material(
+          color: Colors.white,
+          elevation: 1.5,
+          shadowColor: Colors.black26,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accent.withValues(alpha: 0.14),
+                  ),
+                  child: Icon(tip['icon'] as IconData,
+                      size: 22, color: accent),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  tip['title'] as String,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: Text(
+                    tip['subtitle'] as String,
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: Colors.grey.shade600,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

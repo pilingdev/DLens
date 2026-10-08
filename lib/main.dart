@@ -14,6 +14,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+/// True when anonymous Firebase sign-in failed at startup.
+/// Used by UploadQueueService to surface a non-blocking error banner.
+bool authFailed = false;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -27,6 +31,9 @@ void main() async {
     await FirebaseAuth.instance.signInAnonymously();
   } catch (e) {
     debugPrint('Anonymous sign-in failed (non-fatal): $e');
+    // authFailed flag is stored globally so UploadQueueService can display
+    // a "Sharing unavailable" banner instead of failing silently.
+    authFailed = true;
   }
 
   // ── Local storage ─────────────────────────────────────────────────────────
@@ -56,12 +63,13 @@ void main() async {
   // through this scope. There is zero runtime overhead compared to plain
   // StatefulWidget – providers are lazy by default and only compute when
   // first watched.
-  runApp(ProviderScope(child: DengueLensApp(modelReady: modelReady)));
+  runApp(ProviderScope(child: DengueLensApp(modelReady: modelReady, authFailed: authFailed)));
 }
 
 class DengueLensApp extends ConsumerWidget {
   final bool modelReady;
-  const DengueLensApp({super.key, required this.modelReady});
+  final bool authFailed;
+  const DengueLensApp({super.key, required this.modelReady, this.authFailed = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,7 +93,7 @@ class DengueLensApp extends ConsumerWidget {
           brightness: Brightness.light,
         ),
       ),
-      home: DengueLensHome(modelReady: modelReady),
+      home: DengueLensHome(modelReady: modelReady, authFailed: authFailed),
     );
   }
 }

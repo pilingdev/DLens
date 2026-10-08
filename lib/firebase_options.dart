@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyB6hB-E_2ISBPDwsV_Y-uoM6RGKbI6zD6A',
-    appId: '1:348561513167:android:51fce3ffef4e99046ab5ba',
+    appId: '1:348561513167:android:06ed21257b7631b96ab5ba',
     messagingSenderId: '348561513167',
     projectId: 'denguelens',
     storageBucket: 'denguelens.firebasestorage.app',

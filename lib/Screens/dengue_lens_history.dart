@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../models/prediction_result.dart';
 import '../services/history_service.dart';
 import '../services/tflite_service.dart';
+import '../services/location_service.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/scan_record.dart';
 import 'result_screen.dart';
 import 'educational_library_screen.dart';
@@ -45,7 +47,12 @@ class _DengueLensHistoryState extends State<DengueLensHistory> {
 
       setState(() => _scanning = true);
       try {
-        final prediction = await TfliteService().predict(File(photo.path));
+        final results = await Future.wait([
+          TfliteService().predict(File(photo.path)),
+          LocationService().getCurrentPosition(),
+        ]);
+        final prediction = results[0] as PredictionResult;
+        final position = results[1] as Position?;
         final isPositive = prediction.isDengueVector;
         if (mounted) {
           await Navigator.push(
@@ -62,6 +69,7 @@ class _DengueLensHistoryState extends State<DengueLensHistory> {
                 detections: prediction.detections,
                 imageSize: prediction.imageSize,
                 savedDetectionCount: prediction.detections.length,
+                capturedPosition: position,
               ),
             ),
           );
@@ -156,9 +164,7 @@ class _DengueLensHistoryState extends State<DengueLensHistory> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const SymptomQuestionnaireScreen(
-                  mosquitoType: 'Unknown mosquito',
-                ),
+                builder: (context) => const SymptomQuestionnaireScreen(),
               ),
             );
           } else if (index == 4) {
@@ -555,9 +561,9 @@ class ScanCard extends StatelessWidget {
                       width: 80,
                       height: 80,
                       color: const Color(0xFFE0E0E0),
-                      child: record.imageFile != null
+                      child: record.imageFileIfExists != null
                           ? Image.file(
-                              record.imageFile!,
+                              record.imageFileIfExists!,
                               fit: BoxFit.cover,
                               errorBuilder: (ctx, err, stack) => Icon(
                                 Icons.broken_image,

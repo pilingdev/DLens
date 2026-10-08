@@ -2,10 +2,11 @@ import 'dart:io';
 import 'package:DengueLens/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/prediction_result.dart';
 import '../services/tflite_service.dart';
 import '../services/tutorial_service.dart';
+import '../services/location_service.dart';
 import 'dengue_lens_history.dart';
 import 'educational_library_screen.dart';
 import 'result_screen.dart';
@@ -13,10 +14,12 @@ import 'symptom_questionnaire_screen.dart';
 import 'point_map_screen.dart';
 import 'tutorial_overlay.dart';
 import 'settings_dialog.dart';
+import 'camera_tips_sheet.dart';
 
 class DengueLensHome extends StatefulWidget {
   final bool modelReady;
-  const DengueLensHome({super.key, required this.modelReady});
+  final bool authFailed;
+  const DengueLensHome({super.key, required this.modelReady, this.authFailed = false});
 
   @override
   State<DengueLensHome> createState() => _DengueLensHomeState();
@@ -41,7 +44,54 @@ class _DengueLensHomeState extends State<DengueLensHome> {
       if (!TutorialService().hasSeenTutorial && mounted) {
         setState(() => _showTutorial = true);
       }
+      _showDisclaimerIfNeeded();
     });
+  }
+
+  /// Shows a disclaimer dialog about model accuracy on every app launch,
+  /// unless the user has opted out via "Don't show again".
+  void _showDisclaimerIfNeeded() {
+    if (!mounted) return;
+    if (TutorialService().hasSeenDisclaimer) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        icon: Icon(Icons.info_outline_rounded, size: 48, color: Colors.orange.shade700),
+        title: const Text(
+          'Important Disclaimer',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'DengueLens uses AI to identify mosquitoes, but it may not always be accurate. '
+          'Results should not be considered a definitive identification.\n\n'
+          'If a mosquito is present but was not detected, please try retaking '
+          'the photo with better lighting, a closer angle, or a clearer background.',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await TutorialService().markDisclaimerSeen();
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+            child: Text(
+              "Understood, Don't show again",
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2ECC71),
+            ),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Opens the Settings dialog (language, tutorial, exit).
@@ -82,70 +132,61 @@ class _DengueLensHomeState extends State<DengueLensHome> {
       return;
     }
     try {
-      // Use file_picker for better Windows desktop support
-      FilePickerResult? result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-        dialogTitle: 'Select an image',
-      );
+      final ImagePicker picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(source: ImageSource.gallery);
 
-      if (result != null && result.files.single.path != null) {
-        final filePath = result.files.single.path!;
-        final fileExtension = filePath.split('.').last.toLowerCase();
-        final supportedFormats = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
-        if (supportedFormats.contains(fileExtension)) {
-          setState(() {
-            _isProcessing = true;
-            _processingImagePath = filePath;
-          });
-          try {
-            final prediction = await TfliteService().predict(File(filePath));
-            final isPositive = prediction.isDengueVector;
-            if (mounted) {
-              final resultStatus = isPositive ? "positive" : "negative";
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ResultScreen(
-                    imagePath: File(filePath),
-                    testDate: DateTime.now(),
-                    result: resultStatus,
-                    confidence: prediction.confidence,
-                    sampleType: "Mosquito Image",
-                    mosquitoType: prediction.displayName,
-                    boundingBox: _primaryBoundingBox(prediction),
-                    detections: prediction.detections,
-                    imageSize: prediction.imageSize,
-                    savedDetectionCount: prediction.detections.length,
-                  ),
-                ),
-              );
-            }
-          } catch (e) {
-            if (mounted) {
-              final loc = AppLocalizations.of(context)!;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(loc.predictionFailed(e.toString()))),
-              );
-            }
-          } finally {
-            if (mounted) setState(() => _isProcessing = false);
-          }
-        } else {
+      if (photo != null) {
+        final filePath = photo.path;
+        setState(() {
+          _isProcessing = true;
+          _processingImagePath = filePath;
+        });
+        try {
+          // Concurrently run inference and get capture location
+          final results = await Future.wait([
+            TfliteService().predict(File(filePath)),
+            LocationService().getCurrentPosition(),
+          ]);
+          final prediction = results[0] as PredictionResult;
+          final position = results[1] as Position?;
+          final isPositive = prediction.isDengueVector;
           if (mounted) {
-            final loc = AppLocalizations.of(context)!;
-            ScaffoldMessenger.of(
+            final resultStatus = isPositive ? "positive" : "negative";
+            Navigator.push(
               context,
-            ).showSnackBar(SnackBar(content: Text(loc.unsupportedFormat)));
+              MaterialPageRoute(
+                builder: (context) => ResultScreen(
+                  imagePath: File(filePath),
+                  testDate: DateTime.now(),
+                  result: resultStatus,
+                  confidence: prediction.confidence,
+                  sampleType: "Mosquito Image",
+                  mosquitoType: prediction.displayName,
+                  boundingBox: _primaryBoundingBox(prediction),
+                  detections: prediction.detections,
+                  imageSize: prediction.imageSize,
+                  savedDetectionCount: prediction.detections.length,
+                  capturedPosition: position,
+                ),
+              ),
+            );
           }
+        } catch (e) {
+          if (mounted) {
+            final l = AppLocalizations.of(context)!;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(l.predictionFailed(e.toString()))),
+            );
+          }
+        } finally {
+          if (mounted) setState(() => _isProcessing = false);
         }
       }
     } catch (e) {
       if (mounted) {
-        final loc = AppLocalizations.of(context)!;
+        final l = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(loc.failedPickImage(e.toString()))),
+          SnackBar(content: Text(l.failedPickImage(e.toString()))),
         );
         setState(() => _isProcessing = false);
       }
@@ -163,6 +204,10 @@ class _DengueLensHomeState extends State<DengueLensHome> {
       }
       return;
     }
+    // Show camera guidance tips before opening the camera.
+    if (mounted) await CameraTipsSheet.showIfNeeded(context);
+    if (!mounted) return;
+
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? photo = await picker.pickImage(source: ImageSource.camera);
@@ -173,7 +218,13 @@ class _DengueLensHomeState extends State<DengueLensHome> {
           _processingImagePath = photo.path;
         });
         try {
-          final prediction = await TfliteService().predict(File(photo.path));
+          // Concurrently run inference and get capture location
+          final results = await Future.wait([
+            TfliteService().predict(File(photo.path)),
+            LocationService().getCurrentPosition(),
+          ]);
+          final prediction = results[0] as PredictionResult;
+          final position = results[1] as Position?;
           final isPositive = prediction.isDengueVector;
           if (mounted) {
             final result = isPositive ? "positive" : "negative";
@@ -191,6 +242,7 @@ class _DengueLensHomeState extends State<DengueLensHome> {
                   detections: prediction.detections,
                   imageSize: prediction.imageSize,
                   savedDetectionCount: prediction.detections.length,
+                  capturedPosition: position,
                 ),
               ),
             );
@@ -219,6 +271,7 @@ class _DengueLensHomeState extends State<DengueLensHome> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return Stack(
       children: [
         Scaffold(
@@ -228,6 +281,60 @@ class _DengueLensHomeState extends State<DengueLensHome> {
               children: [
                 // Header
                 const HomeHeader(),
+
+                // Status banner: Model not ready or Community sharing offline
+                if (!widget.modelReady)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, size: 20, color: Colors.red.shade800),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            loc.modelNotReady,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red.shade900,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (widget.authFailed)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.cloud_off, size: 20, color: Colors.amber.shade800),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            'Community sharing unavailable (offline mode). Scans are saved locally and will sync when connected.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF7D4A00),
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                 Expanded(
                   child: SingleChildScrollView(
@@ -363,9 +470,7 @@ class _DengueLensHomeState extends State<DengueLensHome> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const SymptomQuestionnaireScreen(
-                      mosquitoType: 'Unknown mosquito',
-                    ),
+                    builder: (context) => const SymptomQuestionnaireScreen(),
                   ),
                 );
               } else if (index == 4) {
@@ -491,15 +596,19 @@ class HomeHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Left spacer (keeps title centred)
-          const SizedBox(width: 48),
-          Text(
-            loc.appName,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          // Info icon — opens camera tips sheet on demand
+          IconButton(
+            icon: const Icon(
+              Icons.info_outline_rounded,
+              color: Colors.black54,
             ),
+            tooltip: 'Camera Tips',
+            onPressed: () => CameraTipsSheet.show(context),
+          ),
+          Image.asset(
+            'assets/images/logo.jpg',
+            height: 40,
+            fit: BoxFit.contain,
           ),
           // Settings button
           IconButton(

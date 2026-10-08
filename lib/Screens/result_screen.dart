@@ -12,6 +12,8 @@ import '../services/connectivity_service.dart';
 import '../services/history_service.dart';
 import '../services/location_service.dart';
 import '../services/sighting_upload_service.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:path_provider/path_provider.dart';
 import 'symptom_questionnaire_screen.dart';
 
 class ResultScreen extends StatefulWidget {
@@ -26,6 +28,9 @@ class ResultScreen extends StatefulWidget {
   final Size? imageSize;
   final int? savedDetectionCount;
 
+  /// Prefetched GPS position at capture time.
+  final Position? capturedPosition;
+
   /// When true, the "Record Result" button is hidden (opened from history).
   final bool isFromHistory;
 
@@ -33,7 +38,7 @@ class ResultScreen extends StatefulWidget {
     super.key,
     this.result = "negative",
     this.confidence = 0.0,
-    this.sampleType = "Blood Sample",
+    this.sampleType = "Mosquito Photo",
     required this.mosquitoType,
     required this.testDate,
     this.imagePath,
@@ -41,6 +46,7 @@ class ResultScreen extends StatefulWidget {
     this.detections,
     this.imageSize,
     this.savedDetectionCount,
+    this.capturedPosition,
     this.isFromHistory = false,
   });
 
@@ -58,6 +64,13 @@ class _ResultScreenState extends State<ResultScreen> {
   bool _isRecording = false;
   bool _isSharing = false;
 
+  // Current saved scan count (read from HistoryService)
+  int _savedScanCount = 0;
+  static const int _maxScans = 12;
+
+  // Prefetched GPS position at screen entry/capture time
+  Position? _capturedPosition;
+
   String _normalizedDetectionLabel(String rawType) {
     final lower = rawType.toLowerCase();
     if (lower.contains('aegypti')) return 'aegypti';
@@ -74,7 +87,10 @@ class _ResultScreenState extends State<ResultScreen> {
     }
     if (widget.mosquitoType.isNotEmpty) {
       final label = _normalizedDetectionLabel(widget.mosquitoType);
-      if (label != 'unknown' && label != 'no mosquito' && label != 'none') {
+      if (label != 'unknown' &&
+          !label.toLowerCase().contains('no mosquito') &&
+          label != 'none' &&
+          label != 'non-mosquito') {
         return [
           Detection(
             label: label,
@@ -120,11 +136,27 @@ class _ResultScreenState extends State<ResultScreen> {
       final normalized = widget.result.toLowerCase();
       final isPositive = normalized == 'positive';
 
-      // 1. Get GPS for the local record
-      final pos = await LocationService().getCurrentPosition();
+      // 1. Get GPS for the local record (prefer captured position at scan time)
+      final pos = _capturedPosition ?? await LocationService().getCurrentPosition();
       final locString = pos != null
           ? LocationService().toLocationString(pos)
           : null;
+
+      // Persist the scan image to app documents directory so cache cleaners cannot remove it
+      File? persistentImageFile = widget.imagePath;
+      if (widget.imagePath != null && widget.imagePath!.existsSync()) {
+        try {
+          final docDir = await getApplicationDocumentsDirectory();
+          final scansDir = Directory('${docDir.path}/scans');
+          if (!scansDir.existsSync()) {
+            await scansDir.create(recursive: true);
+          }
+          final targetPath = '${scansDir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+          persistentImageFile = await widget.imagePath!.copy(targetPath);
+        } catch (_) {
+          persistentImageFile = widget.imagePath;
+        }
+      }
 
       // 2. Save locally only
       await HistoryService().addRecord(
@@ -134,7 +166,7 @@ class _ResultScreenState extends State<ResultScreen> {
           result: isPositive ? 'Dengue vector' : 'Not a dengue vector',
           confidence: widget.confidence,
           date: widget.testDate,
-          imageFile: widget.imagePath,
+          imageFile: persistentImageFile,
           location: locString,
           detectionCount:
               widget.savedDetectionCount ?? (widget.detections?.length ?? 1),
@@ -172,8 +204,8 @@ class _ResultScreenState extends State<ResultScreen> {
         return;
       }
 
-      // 2. Get GPS
-      final pos = await LocationService().getCurrentPosition();
+      // 2. Get GPS (prefer captured position at scan time)
+      final pos = _capturedPosition ?? await LocationService().getCurrentPosition();
       if (pos == null) {
         if (mounted) {
           final loc = AppLocalizations.of(context)!;
@@ -267,7 +299,13 @@ class _ResultScreenState extends State<ResultScreen> {
   @override
   void initState() {
     super.initState();
+    _capturedPosition = widget.capturedPosition;
     _prepareDisplayImage();
+    if (_capturedPosition == null) {
+      _fetchCaptureLocation();
+    }
+    // Read current saved scan count from HistoryService
+    _savedScanCount = HistoryService().records.length;
     // Show bottom sheet if any dengue carrier detected, or alert if no mosquito
     // Suppress when opened from history
     if (!widget.isFromHistory) {
@@ -279,6 +317,15 @@ class _ResultScreenState extends State<ResultScreen> {
         }
       });
     }
+  }
+
+  void _fetchCaptureLocation() async {
+    try {
+      final pos = await LocationService().getCurrentPosition();
+      if (mounted) {
+        setState(() => _capturedPosition = pos);
+      }
+    } catch (_) {}
   }
 
   void _showNoMosquitoPrompt() {
@@ -467,21 +514,23 @@ class _ResultScreenState extends State<ResultScreen> {
 
   /// Builds the overall risk banner shown at the very top of the results section.
   Widget _buildOverallBanner() {
+    final loc = AppLocalizations.of(context);
     final detections = _overlayDetections;
     final hasAegypti = detections.any((d) => d.riskLevel == 'high');
     final hasAlbopictus = detections.any((d) => d.riskLevel == 'moderate');
 
-    // Determine banner color: red = high risk, amber = moderate risk, green = none
+    // Determine banner color: red = high risk, amber = moderate risk, green = not a vector / clear
     final Color color = hasAegypti
         ? const Color(0xFFC62828)
         : hasAlbopictus
         ? const Color(0xFFF57F17)
-        : const Color.fromARGB(255, 101, 253, 0);
+        : const Color(0xFF2E7D32);
     final IconData icon = hasAegypti
         ? Icons.warning_rounded
         : hasAlbopictus
         ? Icons.info_rounded
         : Icons.check_circle_rounded;
+
     // If detections list is empty but a mosquito was identified via mosquitoType
     // (e.g. Culex passed as a string), treat it as 1 detected mosquito.
     final mt = widget.mosquitoType.toLowerCase();
@@ -493,13 +542,15 @@ class _ResultScreenState extends State<ResultScreen> {
             ? detections.length
             : (hasNamedMosquito ? 1 : 0));
     final countLabel = count == 1
-        ? '1 Mosquito Detected'
-        : '$count Mosquitoes Detected';
+        ? (loc?.mosquitoDetected ?? '1 Mosquito Detected')
+        : (loc?.mosquitoesDetected(count) ?? '$count Mosquitoes Detected');
     final riskLabel = hasAegypti
-        ? 'HIGH RISK — Dengue Vector Detected'
+        ? (loc?.highRiskBanner ?? 'HIGH RISK — Dengue Vector Detected')
         : hasAlbopictus
-        ? 'MODERATE RISK — Dengue Vector Detected'
-        : 'Not a Dengue Vector';
+        ? (loc?.moderateRiskBanner ?? 'MODERATE RISK — Dengue Vector Detected')
+        : count > 0
+        ? (loc?.notADengueVector ?? 'Not a Dengue Vector')
+        : (loc?.noMosquitoDetected ?? 'No Mosquito Detected');
 
     return Container(
       width: double.infinity,
@@ -534,23 +585,25 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              countLabel,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: color,
+          if (count > 0) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                countLabel,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -558,22 +611,23 @@ class _ResultScreenState extends State<ResultScreen> {
 
   /// Builds an individual detection card for a single [Detection].
   Widget _buildDetectionCard(Detection detection, int index) {
+    final loc = AppLocalizations.of(context);
     final risk = detection.riskLevel; // 'high', 'moderate', or 'none'
     final Color color = risk == 'high'
         ? const Color(0xFFC62828)
         : risk == 'moderate'
         ? const Color(0xFFF57F17)
-        : Colors.green;
+        : const Color(0xFF2E7D32);
     final String riskBadge = risk == 'high'
-        ? 'HIGH RISK'
+        ? (loc?.highRisk ?? 'HIGH RISK')
         : risk == 'moderate'
-        ? 'MODERATE RISK'
-        : 'NOT A VECTOR';
+        ? (loc?.moderateRisk ?? 'MODERATE RISK')
+        : (loc?.notAVector ?? 'NOT A VECTOR');
     final String subLabel = risk == 'high'
-        ? 'Dengue Vector — High Risk'
+        ? (loc?.dengueVectorHighRisk ?? 'Dengue Vector — High Risk')
         : risk == 'moderate'
-        ? 'Dengue Vector — Moderate Risk'
-        : 'Not a Dengue Vector';
+        ? (loc?.dengueVectorModerateRisk ?? 'Dengue Vector — Moderate Risk')
+        : (loc?.notADengueVector ?? 'Not a Dengue Vector');
     final confidencePct = (detection.confidence * 100).toStringAsFixed(1);
 
     return Card(
@@ -686,7 +740,9 @@ class _ResultScreenState extends State<ResultScreen> {
   String _buildRecommendationText() {
     final detections = _overlayDetections;
     if (detections.isEmpty) {
-      return 'No mosquito detected. If symptoms persist, please consult a healthcare professional.';
+      return 'No mosquito was detected in this image. '
+          'If you believe a mosquito is present, try taking a clearer photo. '
+          'If symptoms persist, please consult a healthcare professional.';
     }
     final hasDengue = _hasAnyDengueVector;
     if (hasDengue) {
@@ -704,10 +760,13 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final detections = _overlayDetections;
     final isPositive = _hasAnyDengueVector;
-    final resultColor = isPositive ? Colors.red : Colors.green;
-    final resultMessage = isPositive ? 'Dengue vector' : 'Not a dengue vector';
+    final resultColor = isPositive ? const Color(0xFFC62828) : const Color(0xFF2E7D32);
+    final resultMessage = isPositive
+        ? 'Dengue vector'
+        : (loc?.notADengueVector ?? 'Not a dengue vector');
 
     return SafeArea(
       child: Scaffold(
@@ -737,8 +796,9 @@ class _ResultScreenState extends State<ResultScreen> {
                     if (detections.isNotEmpty) ...[
                       Text(
                         detections.length == 1
-                            ? 'Detection Result'
-                            : 'Detection Results (${detections.length})',
+                            ? (loc?.detectionResult ?? 'Detection Result')
+                            : (loc?.detectionResults(detections.length) ??
+                                'Detection Results (${detections.length})'),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -760,37 +820,37 @@ class _ResultScreenState extends State<ResultScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Detection Details',
+                                loc?.detectionDetails ?? 'Detection Details',
                                 style: Theme.of(context).textTheme.titleLarge
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 16),
                               _DetailRow(
-                                label: 'Sample Type',
+                                label: loc?.sampleType ?? 'Sample Type',
                                 value: widget.sampleType,
                               ),
                               const Divider(),
                               _DetailRow(
                                 label: detections.length == 1
-                                    ? 'Mosquito Type'
-                                    : 'Primary Mosquito',
+                                    ? (loc?.mosquitoType ?? 'Mosquito Type')
+                                    : (loc?.primaryMosquito ?? 'Primary Mosquito'),
                                 value: widget.mosquitoType,
                               ),
                               const Divider(),
                               _DetailRow(
-                                label: 'Detection Date',
+                                label: loc?.detectionDate ?? 'Detection Date',
                                 value:
                                     '${widget.testDate.day}/${widget.testDate.month}/${widget.testDate.year}',
                               ),
                               const Divider(),
                               _DetailRow(
-                                label: 'Result',
+                                label: loc?.result ?? 'Result',
                                 value: resultMessage,
                                 valueColor: resultColor,
                               ),
                               const Divider(),
                               _DetailRow(
-                                label: 'Confidence',
+                                label: loc?.confidence ?? 'Confidence',
                                 value:
                                     '${(widget.confidence * 100).toStringAsFixed(1)}%',
                               ),
@@ -821,7 +881,7 @@ class _ResultScreenState extends State<ResultScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Recommendation',
+                                  loc?.recommendation ?? 'Recommendation',
                                   style: Theme.of(context).textTheme.titleMedium
                                       ?.copyWith(
                                         fontWeight: FontWeight.bold,
@@ -853,7 +913,7 @@ class _ResultScreenState extends State<ResultScreen> {
                           Navigator.pop(context);
                         },
                         icon: const Icon(Icons.home),
-                        label: const Text('Back to Home'),
+                        label: Text(loc?.backToHomeBtn ?? 'Back to Home'),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           backgroundColor: const Color(0xFF2ECC71),
@@ -905,6 +965,100 @@ class _ResultScreenState extends State<ResultScreen> {
                         const SizedBox(height: 12),
                       ],
                       // ── Record Result (local save only) ──
+
+                      // Scan storage counter badge
+                      if (!_isRecorded) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF3498DB).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF3498DB).withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.folder_outlined,
+                                size: 16,
+                                color: Color(0xFF3498DB),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Scan history: $_savedScanCount / $_maxScans saved',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF3498DB),
+                                ),
+                              ),
+                              const Spacer(),
+                              // Mini progress indicator
+                              SizedBox(
+                                width: 60,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: _savedScanCount / _maxScans,
+                                    backgroundColor: const Color(0xFF3498DB)
+                                        .withValues(alpha: 0.15),
+                                    color: _savedScanCount >= _maxScans
+                                        ? const Color(0xFFF39C12)
+                                        : const Color(0xFF3498DB),
+                                    minHeight: 6,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // FIFO warning — only when at max capacity
+                        if (_savedScanCount >= _maxScans) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3CD),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: const Color(0xFFF39C12).withValues(alpha: 0.6),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: Color(0xFFF39C12),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                const Expanded(
+                                  child: Text(
+                                    'You have 12 saved scans (maximum). '  
+                                    'Saving this scan will automatically delete your oldest saved scan.',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      height: 1.4,
+                                      color: Color(0xFF7D5A00),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ],
+
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(

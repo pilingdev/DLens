@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:348561513167:android:06ed21257b7631b96ab5ba",
+        "android_client_info": {
+          "package_name": "com.denguelens.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6hB-E_2ISBPDwsV_Y-uoM6RGKbI6zD6A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:348561513167:android:51fce3ffef4e99046ab5ba",
         "android_client_info": {
           "package_name": "com.example.qwe"

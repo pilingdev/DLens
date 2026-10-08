@@ -43,3 +43,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Python virtual environment
+venv/
+.venv/
+env/
+__pycache__/
+
+# Local tool settings
+.claude/
+

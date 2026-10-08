@@ -1,7 +1,7 @@
 import 'package:DengueLens/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:io';
+import 'package:flutter/services.dart';
 import '../providers/locale_provider.dart';
 import '../services/tutorial_service.dart';
 
@@ -68,7 +68,7 @@ class SettingsDialog extends ConsumerWidget {
                   ),
                   Switch(
                     value: isFilipino,
-                    activeColor: const Color(0xFF2ECC71),
+                    activeThumbColor: const Color(0xFF2ECC71),
                     onChanged: (value) {
                       ref
                           .read(localeProvider.notifier)
@@ -122,7 +122,7 @@ class SettingsDialog extends ConsumerWidget {
             ),
             title: Text(loc.exitApp, style: const TextStyle(fontSize: 15)),
             onTap: () {
-              exit(0);
+              SystemNavigator.pop();
             },
           ),
         ],

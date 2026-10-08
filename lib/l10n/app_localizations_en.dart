@@ -568,4 +568,102 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapRetryConnection => 'Retry Connection';
+
+  @override
+  String get cameraTipsTitle => 'Before You Scan';
+
+  @override
+  String get cameraTipsSubtitle =>
+      'Follow these tips for the most accurate detection.';
+
+  @override
+  String get cameraTipDistanceTitle => 'Get Close';
+
+  @override
+  String get cameraTipDistanceDesc =>
+      'Hold the camera 5–10 cm from the mosquito (or closer) while keeping the full body in frame.';
+
+  @override
+  String get cameraTipLightingTitle => 'Use Good Lighting';
+
+  @override
+  String get cameraTipLightingDesc =>
+      'Turn on your flash if the area is dark to ensure the mosquito\'s color, markings, and wings are clearly visible.';
+
+  @override
+  String get cameraTipCountTitle => 'One Mosquito at a Time';
+
+  @override
+  String get cameraTipCountDesc =>
+      'The app detects 1–3 mosquitoes per photo. For best accuracy, avoid capturing multiple mosquitoes at once.';
+
+  @override
+  String get cameraTipsGotIt => 'Got it';
+
+  @override
+  String get warningSigns => 'Warning Signs — Seek Emergency Care';
+
+  @override
+  String get warningSignsExplainer =>
+      'Any of these signs means seek emergency medical care immediately. Do not wait.';
+
+  @override
+  String get regularSymptoms => 'Dengue Symptoms';
+
+  @override
+  String get riskLevelLow => 'Low';
+
+  @override
+  String get riskLevelModerate => 'Moderate';
+
+  @override
+  String get riskLevelHigh => 'High';
+
+  @override
+  String get riskLevelEmergency => 'Emergency';
+
+  @override
+  String get riskSummaryNoSymptoms =>
+      'You reported no symptoms. Keep monitoring your health and take precautions to avoid further mosquito bites.';
+
+  @override
+  String get riskSummaryLow =>
+      'Your assessment indicates a Low Risk level. Continue monitoring your health and take precautions to avoid further mosquito bites.';
+
+  @override
+  String get riskSummaryModerate =>
+      'Your assessment indicates a Moderate Risk level. Some dengue symptoms detected. Monitor closely, stay hydrated, and schedule a consultation with a healthcare provider if symptoms worsen.';
+
+  @override
+  String get riskSummaryHigh =>
+      'Your assessment indicates a High Risk level with multiple dengue symptoms. Seek prompt medical evaluation today. Immediate consultation is advised.';
+
+  @override
+  String get riskSummaryEmergency =>
+      'Your symptoms include WHO dengue warning signs. Seek emergency medical attention immediately. Go to the nearest hospital or call emergency services now.';
+
+  @override
+  String get whyResultWarningSigns =>
+      'Warning signs detected — these require immediate emergency medical care.';
+
+  @override
+  String whyResultContributors(String symptoms) {
+    return '$symptoms are strong dengue indicators.';
+  }
+
+  @override
+  String get andConnector => ' and ';
+
+  @override
+  String vectorBonusNote(String species, int bonus) {
+    return '$species detected: +$bonus pts added to score.';
+  }
+
+  @override
+  String get emergencyCare1 =>
+      'Go to the nearest Emergency Room or call emergency services immediately.';
+
+  @override
+  String get emergencyCare2 =>
+      'Do not take aspirin or ibuprofen. Paracetamol only for fever.';
 }

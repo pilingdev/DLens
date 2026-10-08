@@ -1,40 +1,29 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'dart:io';
+import 'package:DengueLens/utils/constants.dart';
 
 void main() {
-  test('Inspect TFLite models', () async {
+  test('Inspect TFLite models', skip: 'Requires native tflite binaries – run manually', () async {
     try {
-      final modelFile = File('Model/yolo11/best_int8.tflite');
-      if (!modelFile.existsSync()) {
-        print('INT8 model not found at ${modelFile.path}');
-        // try absolute path
-        final absPath = File('E:/UI/DengueLens_Updated/DengueLens/Model/yolo11/best_int8.tflite');
-        if (absPath.existsSync()) {
-            print("Found at absolute path");
-            final interpreter = Interpreter.fromFile(absPath);
-            print('Inputs:');
-            for (var t in interpreter.getInputTensors()) print('${t.name}: ${t.shape}, ${t.type}');
-            print('Outputs:');
-            for (var t in interpreter.getOutputTensors()) print('${t.name}: ${t.shape}, ${t.type}');
-        } else {
-            print("Not found anywhere.");
+      final modelFile = File(AppConstants.modelPath);
+      if (modelFile.existsSync()) {
+        final interpreter = Interpreter.fromFile(modelFile);
+        debugPrint('Model: ${AppConstants.modelPath}');
+        debugPrint('Inputs:');
+        for (var tensor in interpreter.getInputTensors()) {
+          debugPrint(' - ${tensor.name}: shape=${tensor.shape}, type=${tensor.type}');
+        }
+        debugPrint('Outputs:');
+        for (var tensor in interpreter.getOutputTensors()) {
+          debugPrint(' - ${tensor.name}: shape=${tensor.shape}, type=${tensor.type}');
         }
       } else {
-        final interpreter = Interpreter.fromFile(modelFile);
-        print('INT8 Model:');
-        print('Inputs:');
-        for (var tensor in interpreter.getInputTensors()) {
-          print(' - ${tensor.name}: shape=${tensor.shape}, type=${tensor.type}');
-        }
-        print('Outputs:');
-        for (var tensor in interpreter.getOutputTensors()) {
-          print(' - ${tensor.name}: shape=${tensor.shape}, type=${tensor.type}');
-        }
+        debugPrint('Model file not found at ${modelFile.path}');
       }
     } catch (e, stack) {
-      print('Error: $e');
-      print(stack);
+      debugPrint('Error: $e\n$stack');
     }
   });
 }

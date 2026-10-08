@@ -1111,6 +1111,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry Connection'**
   String get mapRetryConnection;
+
+  /// No description provided for @cameraTipsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Before You Scan'**
+  String get cameraTipsTitle;
+
+  /// No description provided for @cameraTipsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow these tips for the most accurate detection.'**
+  String get cameraTipsSubtitle;
+
+  /// No description provided for @cameraTipDistanceTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Get Close'**
+  String get cameraTipDistanceTitle;
+
+  /// No description provided for @cameraTipDistanceDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold the camera 5–10 cm from the mosquito (or closer) while keeping the full body in frame.'**
+  String get cameraTipDistanceDesc;
+
+  /// No description provided for @cameraTipLightingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Good Lighting'**
+  String get cameraTipLightingTitle;
+
+  /// No description provided for @cameraTipLightingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on your flash if the area is dark to ensure the mosquito\'s color, markings, and wings are clearly visible.'**
+  String get cameraTipLightingDesc;
+
+  /// No description provided for @cameraTipCountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'One Mosquito at a Time'**
+  String get cameraTipCountTitle;
+
+  /// No description provided for @cameraTipCountDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The app detects 1–3 mosquitoes per photo. For best accuracy, avoid capturing multiple mosquitoes at once.'**
+  String get cameraTipCountDesc;
+
+  /// No description provided for @cameraTipsGotIt.
+  ///
+  /// In en, this message translates to:
+  /// **'Got it'**
+  String get cameraTipsGotIt;
+
+  /// No description provided for @warningSigns.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning Signs — Seek Emergency Care'**
+  String get warningSigns;
+
+  /// No description provided for @warningSignsExplainer.
+  ///
+  /// In en, this message translates to:
+  /// **'Any of these signs means seek emergency medical care immediately. Do not wait.'**
+  String get warningSignsExplainer;
+
+  /// No description provided for @regularSymptoms.
+  ///
+  /// In en, this message translates to:
+  /// **'Dengue Symptoms'**
+  String get regularSymptoms;
+
+  /// No description provided for @riskLevelLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get riskLevelLow;
+
+  /// No description provided for @riskLevelModerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderate'**
+  String get riskLevelModerate;
+
+  /// No description provided for @riskLevelHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get riskLevelHigh;
+
+  /// No description provided for @riskLevelEmergency.
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency'**
+  String get riskLevelEmergency;
+
+  /// No description provided for @riskSummaryNoSymptoms.
+  ///
+  /// In en, this message translates to:
+  /// **'You reported no symptoms. Keep monitoring your health and take precautions to avoid further mosquito bites.'**
+  String get riskSummaryNoSymptoms;
+
+  /// No description provided for @riskSummaryLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Your assessment indicates a Low Risk level. Continue monitoring your health and take precautions to avoid further mosquito bites.'**
+  String get riskSummaryLow;
+
+  /// No description provided for @riskSummaryModerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Your assessment indicates a Moderate Risk level. Some dengue symptoms detected. Monitor closely, stay hydrated, and schedule a consultation with a healthcare provider if symptoms worsen.'**
+  String get riskSummaryModerate;
+
+  /// No description provided for @riskSummaryHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'Your assessment indicates a High Risk level with multiple dengue symptoms. Seek prompt medical evaluation today. Immediate consultation is advised.'**
+  String get riskSummaryHigh;
+
+  /// No description provided for @riskSummaryEmergency.
+  ///
+  /// In en, this message translates to:
+  /// **'Your symptoms include WHO dengue warning signs. Seek emergency medical attention immediately. Go to the nearest hospital or call emergency services now.'**
+  String get riskSummaryEmergency;
+
+  /// No description provided for @whyResultWarningSigns.
+  ///
+  /// In en, this message translates to:
+  /// **'Warning signs detected — these require immediate emergency medical care.'**
+  String get whyResultWarningSigns;
+
+  /// No description provided for @whyResultContributors.
+  ///
+  /// In en, this message translates to:
+  /// **'{symptoms} are strong dengue indicators.'**
+  String whyResultContributors(String symptoms);
+
+  /// No description provided for @andConnector.
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get andConnector;
+
+  /// No description provided for @vectorBonusNote.
+  ///
+  /// In en, this message translates to:
+  /// **'{species} detected: +{bonus} pts added to score.'**
+  String vectorBonusNote(String species, int bonus);
+
+  /// No description provided for @emergencyCare1.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to the nearest Emergency Room or call emergency services immediately.'**
+  String get emergencyCare1;
+
+  /// No description provided for @emergencyCare2.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not take aspirin or ibuprofen. Paracetamol only for fever.'**
+  String get emergencyCare2;
 }
 
 class _AppLocalizationsDelegate

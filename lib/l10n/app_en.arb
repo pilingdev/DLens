@@ -199,5 +199,41 @@
   "@mapActiveRecent": {"placeholders": {"active": {"type": "int"}, "recent": {"type": "int"}}},
   "mapMyScan": "My Scan",
   "mapOfflineDesc": "The pinpoint map requires an active internet connection to load map tiles and real-time crowd-sourced sightings.",
-  "mapRetryConnection": "Retry Connection"
+  "mapRetryConnection": "Retry Connection",
+
+  "cameraTipsTitle": "Before You Scan",
+  "cameraTipsSubtitle": "Follow these tips for the most accurate detection.",
+  "cameraTipDistanceTitle": "Get Close",
+  "cameraTipDistanceDesc": "Hold the camera 5–10 cm from the mosquito (or closer) while keeping the full body in frame.",
+  "cameraTipLightingTitle": "Use Good Lighting",
+  "cameraTipLightingDesc": "Turn on your flash if the area is dark to ensure the mosquito's color, markings, and wings are clearly visible.",
+  "cameraTipCountTitle": "One Mosquito at a Time",
+  "cameraTipCountDesc": "The app detects 1–3 mosquitoes per photo. For best accuracy, avoid capturing multiple mosquitoes at once.",
+  "cameraTipsGotIt": "Got it",
+
+  "warningSigns": "Warning Signs — Seek Emergency Care",
+  "warningSignsExplainer": "Any of these signs means seek emergency medical care immediately. Do not wait.",
+  "regularSymptoms": "Dengue Symptoms",
+
+  "riskLevelLow": "Low",
+  "riskLevelModerate": "Moderate",
+  "riskLevelHigh": "High",
+  "riskLevelEmergency": "Emergency",
+
+  "riskSummaryNoSymptoms": "You reported no symptoms. Keep monitoring your health and take precautions to avoid further mosquito bites.",
+  "riskSummaryLow": "Your assessment indicates a Low Risk level. Continue monitoring your health and take precautions to avoid further mosquito bites.",
+  "riskSummaryModerate": "Your assessment indicates a Moderate Risk level. Some dengue symptoms detected. Monitor closely, stay hydrated, and schedule a consultation with a healthcare provider if symptoms worsen.",
+  "riskSummaryHigh": "Your assessment indicates a High Risk level with multiple dengue symptoms. Seek prompt medical evaluation today. Immediate consultation is advised.",
+  "riskSummaryEmergency": "Your symptoms include WHO dengue warning signs. Seek emergency medical attention immediately. Go to the nearest hospital or call emergency services now.",
+
+  "whyResultWarningSigns": "Warning signs detected — these require immediate emergency medical care.",
+  "whyResultContributors": "{symptoms} are strong dengue indicators.",
+  "@whyResultContributors": {"placeholders": {"symptoms": {"type": "String"}}},
+  "andConnector": " and ",
+
+  "vectorBonusNote": "{species} detected: +{bonus} pts added to score.",
+  "@vectorBonusNote": {"placeholders": {"species": {"type": "String"}, "bonus": {"type": "int"}}},
+
+  "emergencyCare1": "Go to the nearest Emergency Room or call emergency services immediately.",
+  "emergencyCare2": "Do not take aspirin or ibuprofen. Paracetamol only for fever."
 }

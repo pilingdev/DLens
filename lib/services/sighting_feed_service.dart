@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/sighting_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../utils/constants.dart';
 
 /// Service providing real‑time dengue vector sighting streams from Firestore.
 class SightingFeedService {
@@ -13,8 +15,12 @@ class SightingFeedService {
   final _db = FirebaseFirestore.instance;
 
   /// Returns a real-time stream of dengue vector sightings within [radiusM] meters of [center].
+  /// Per documentation, sightings are shown within a fixed 100 m radius.
   /// Filters out sightings older than 7 days.
-  Stream<List<Sighting>> sightingsNear(LatLng center, {double radiusM = 100}) {
+  Stream<List<Sighting>> sightingsNear(
+    LatLng center, {
+    double radiusM = AppConstants.communityRadiusMeters,
+  }) {
     // 1. Compute bounding box deltas
     // ~111.32 km per degree of latitude
     final double latDelta = radiusM / 111320.0;
@@ -41,53 +47,64 @@ class SightingFeedService {
         )
         .orderBy('lat')
         .snapshots()
+        .handleError((Object err) {
+          // Surface index / permission errors so callers can show a UI message
+          // instead of a permanently blank map.
+          debugPrint('SightingFeedService stream error: $err');
+        })
         .map((snapshot) {
           final List<Sighting> validSightings = [];
 
           for (var doc in snapshot.docs) {
-            final data = doc.data();
-            final double lng = data['lng'] as double;
+            try {
+              final data = doc.data();
+              // Use (num).toDouble() to handle both int and double from Firestore
+              final double lat = (data['lat'] as num).toDouble();
+              final double lng = (data['lng'] as num).toDouble();
 
-            // 3. Client-side longitude filter
-            if (lng >= minLng && lng <= maxLng) {
-              final latLng = LatLng(data['lat'] as double, lng);
+              // 3. Client-side longitude filter
+              if (lng >= minLng && lng <= maxLng) {
+                final latLng = LatLng(lat, lng);
 
-              // 4. True Haversine distance filter (to get a circle, not a square box)
-              final distance = distanceCalc.as(
-                LengthUnit.Meter,
-                center,
-                latLng,
-              );
-              if (distance <= radiusM) {
-                // Map Firestore data to Sighting model
-                Species species = Species.aegypti;
-                if (data['species'] == 'albopictus') {
-                  species = Species.albopictus;
-                }
-
-                // Optional: calculate bearing
-                final bearing = _getBearingString(center, latLng);
-
-                final timestamp = (data['timestamp'] as Timestamp).toDate();
-                final isOwnSighting =
-                    data['userId'] == FirebaseAuth.instance.currentUser?.uid;
-
-                validSightings.add(
-                  Sighting(
-                    id: doc.id,
-                    species: species,
-                    location: latLng,
-                    timestamp: timestamp,
-                    distance: distance,
-                    bearing: bearing,
-                    isOwnSighting: isOwnSighting,
-                  ),
+                // 4. True Haversine distance filter (circle, not bounding box)
+                final distance = distanceCalc.as(
+                  LengthUnit.Meter,
+                  center,
+                  latLng,
                 );
+                if (distance <= radiusM) {
+                  // Map species string to enum
+                  Species species = Species.aegypti;
+                  if (data['species'] == 'albopictus') {
+                    species = Species.albopictus;
+                  }
+
+                  final bearing = _getBearingString(center, latLng);
+                  final timestamp = (data['timestamp'] as Timestamp).toDate();
+                  final isOwnSighting =
+                      data['userId'] == FirebaseAuth.instance.currentUser?.uid;
+
+                  validSightings.add(
+                    Sighting(
+                      id: doc.id,
+                      species: species,
+                      location: latLng,
+                      timestamp: timestamp,
+                      distance: distance,
+                      bearing: bearing,
+                      isOwnSighting: isOwnSighting,
+                    ),
+                  );
+                }
               }
+            } catch (docErr) {
+              // Skip malformed documents rather than crashing the whole stream
+              debugPrint('SightingFeedService: skipped malformed doc ${doc.id}: $docErr');
             }
           }
           return validSightings;
         });
+
   }
 
   String _getBearingString(LatLng center, LatLng target) {

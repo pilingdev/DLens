@@ -31,7 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
   image_picker: ^1.1.2
-  file_picker: ^11.0.2
   camera: ^0.12.0+1
   # TensorFlow Lite for Flutter
   tflite_flutter: ^0.12.1
@@ -90,6 +89,8 @@ flutter:
     - Model/labels_classifier.txt
     - Model/newyolo1.tflite
     - Model/newyolo.tflite
+    - Model/best.tflite
+    - assets/images/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

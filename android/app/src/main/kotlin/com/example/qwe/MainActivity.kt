@@ -1,4 +1,4 @@
-package com.example.qwe
+package com.denguelens.app
 
 import io.flutter.embedding.android.FlutterActivity
 

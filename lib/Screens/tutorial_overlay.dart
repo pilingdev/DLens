@@ -78,11 +78,11 @@ class _TutorialOverlayState extends State<TutorialOverlay>
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
 
+  bool _stepsBuilt = false; // guard so _buildSteps only runs once
+
   @override
   void initState() {
     super.initState();
-    // Build steps lazily after the locale is available
-    _buildSteps(context);
 
     _animController = AnimationController(
       vsync: this,
@@ -93,6 +93,15 @@ class _TutorialOverlayState extends State<TutorialOverlay>
       curve: Curves.easeInOut,
     );
     _animController.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_stepsBuilt) {
+      _buildSteps(context);
+      _stepsBuilt = true;
+    }
   }
 
   void _buildSteps(BuildContext context) {
